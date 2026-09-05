@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 import urllib.request
 import uuid
@@ -32,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = os.path.normpath(os.path.join(HERE, ".."))
 CFG = os.path.join(BASE, "Caddyfile")
 SVCS = os.path.join(BASE, "dashboard", "services.json")
+DASH_CFG = os.path.join(BASE, "dashboard", "dashboard-config.json")
 LOGOS = os.path.join(BASE, "dashboard", "logos")
 INDEX = os.path.join(HERE, "index.html")
 DIST = os.path.join(HERE, "dist")
@@ -68,6 +70,75 @@ def save_services(services):
         json.dump({"services": services}, f, ensure_ascii=False, indent=2)
         f.write("\n")
     os.replace(tmp, SVCS)
+
+
+# ---------------- dashboard config ----------------
+
+SHOW_KEYS = ("battery", "cpu", "storage", "report", "dock", "todo")
+
+
+def default_config():
+    return {
+        "theme": "dark",
+        "accent": "#00a4dc",
+        "show": {k: True for k in SHOW_KEYS},
+        "widgets": [],
+    }
+
+
+def normalize_config(cfg):
+    if not isinstance(cfg, dict):
+        raise ValueError("configuração inválida")
+    theme = cfg.get("theme")
+    accent = str(cfg.get("accent") or "")
+    show = cfg.get("show") if isinstance(cfg.get("show"), dict) else {}
+    out = {
+        "theme": theme if theme in ("dark", "light") else "dark",
+        "accent": accent if re.fullmatch(r"#[0-9a-fA-F]{6}", accent) else "#00a4dc",
+        "show": {k: bool(show.get(k, True)) for k in SHOW_KEYS},
+        "widgets": [],
+    }
+    widgets = []
+    for w in (cfg.get("widgets") or []):
+        if not isinstance(w, dict) or w.get("type") != "todo":
+            continue
+        items = []
+        for it in (w.get("items") or []):
+            if not isinstance(it, dict):
+                continue
+            items.append({
+                "id": str(it.get("id") or ("i%d" % (len(items) + 1))),
+                "text": str(it.get("text") or "")[:200],
+                "done": bool(it.get("done")),
+            })
+        wid = str(w.get("id") or "")
+        if not wid:
+            wid = "todo-%d" % (len(widgets) + 1 + int(time.time()) % 1000)
+        widgets.append({
+            "id": wid,
+            "type": "todo",
+            "title": str(w.get("title") or "Tarefas")[:60],
+            "show": bool(w.get("show", True)),
+            "items": items,
+        })
+    out["widgets"] = widgets
+    return out
+
+
+def load_config():
+    try:
+        with open(DASH_CFG) as f:
+            return normalize_config(json.load(f))
+    except (OSError, ValueError):
+        return default_config()
+
+
+def save_config(cfg):
+    tmp = DASH_CFG + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(normalize_config(cfg), f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, DASH_CFG)
 
 
 def read_caddyfile():
@@ -557,6 +628,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/services":
                 self._json(200, {"services": load_services()})
                 return
+            if path == "/api/config":
+                self._json(200, {"config": load_config()})
+                return
             if path == "/api/presets":
                 presets = sorted(os.listdir(os.path.join(LOGOS, "presets")))
                 self._json(200, {"presets": presets})
@@ -608,7 +682,23 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "rota desconhecida"})
 
     def do_PUT(self):
-        m = re.match(r"^/api/services/(\d+)$", self.path.split("?")[0])
+        path = self.path.split("?")[0]
+        if path == "/api/config":
+            try:
+                body = json.loads(self._read_body().decode("utf-8", "replace") or "{}")
+            except ValueError:
+                self._json(400, {"error": "JSON inválido"})
+                return
+            try:
+                cfg = normalize_config(body)
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+                return
+            with _LOCK:
+                save_config(cfg)
+            self._json(200, {"ok": True, "message": "Configuração do dashboard salva", "config": cfg})
+            return
+        m = re.match(r"^/api/services/(\d+)$", path)
         if not m:
             self._json(404, {"error": "rota desconhecida"})
             return
@@ -723,6 +813,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if not os.path.isfile(DASH_CFG):
+        save_config(default_config())
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError as e:

@@ -12,15 +12,17 @@ export function Header({
   uptime?: number | null;
 }) {
   return (
-    <div className="header">
+    <header className="hero">
+      <div className="hero-eyebrow">Painel do servidor pessoal</div>
       <h1>Server</h1>
-      <p>{window.location.host}</p>
+      <div className="hero-sub">{window.location.host}</div>
       <div className="status-bar">
         <div className="status-item">
           <div className="status-dot" />
           <span>Online</span>
+          <span className="status-divider" />
+          <span className="status-mono">{fmtUptime(uptime)}</span>
         </div>
-        <div className="status-item">{fmtUptime(uptime)}</div>
         <div
           className={'status-item eco-btn' + (eco ? ' active' : '')}
           role="button"
@@ -43,6 +45,6 @@ export function Header({
           <span>{eco ? (automatic ? 'Economia automática' : 'Economia ativa') : 'Economia'}</span>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

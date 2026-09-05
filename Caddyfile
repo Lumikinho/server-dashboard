@@ -19,6 +19,16 @@
 		file_server
 	}
 
+	handle /dashboard-config.json {
+		root * /home/lumiko/caddy/dashboard
+		file_server
+	}
+
+	handle /dashboard/api/* {
+		uri strip_prefix /dashboard
+		reverse_proxy localhost:8891
+	}
+
 	root * /home/lumiko/caddy/dashboard/dist
 	file_server
 

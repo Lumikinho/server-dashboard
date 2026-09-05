@@ -10,6 +10,7 @@ logs/
 dashboard/battery_history.json
 dashboard/samples.jsonl
 dashboard/services.json
+dashboard/dashboard-config.json
 *.db
 
 # Filebrowser vive em /home/lumiko/filebrowser/ (fora do repo)

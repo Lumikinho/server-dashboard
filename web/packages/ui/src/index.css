@@ -102,7 +102,6 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--accent-bg, rgba(128, 128, 128, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.06);
   transition: filter 0.25s, opacity 0.25s;
 }
 .svc-icon img { width: 34px; height: 34px; object-fit: contain; }
@@ -148,41 +147,41 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-bg);
-  color: var(--accent);
-  border: 1px solid rgba(255, 255, 255, 0.08);
   transition: filter 0.25s, opacity 0.25s;
 }
 .dock-icon img { width: 44px; height: 44px; object-fit: contain; }
-.dock-label {
+.dock-pop {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.75);
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(12, 12, 18, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #fff;
-  font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
   white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
-  max-width: 200px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s, visibility 0.15s;
 }
-.dock-item:hover .dock-label { opacity: 1; }
+.dock-item.pop-open .dock-pop { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+.dock-item.maintenance .dock-pop { color: #fbbf24; }
+.dock-item.offline .dock-pop { color: #f87171; }
 
 .dock-item.offline { cursor: not-allowed; }
 .dock-item.offline:hover, .dock-item.offline:active { transform: none; }
 .dock-item.offline .dock-icon { filter: grayscale(1); opacity: 0.4; }
-.dock-item.offline .dock-label { color: #999; }
 
 .dock-item.maintenance { cursor: wait; }
 .dock-item.maintenance:hover, .dock-item.maintenance:active { transform: none; }
 .dock-item.maintenance .dock-icon { filter: grayscale(1); opacity: 0.35; }
-.dock-item.maintenance .dock-label { color: #fbbf24; }
 
 /* ---------- toasts ---------- */
 .toast-stack {
@@ -241,19 +240,6 @@ body.eco #battChart, body.eco #cpuChart { opacity: 0.7; }
   .dock-item:hover { transform: none; }
   .dock-item:hover + .dock-item, .dock-item:has(+ .dock-item:hover) { transform: none; }
   .dock-item:active { transform: scale(1.18) translateY(-4px); }
-  .dock-label {
-    position: static;
-    transform: none;
-    opacity: 1;
-    background: transparent;
-    color: #bbb;
-    font-size: 0.6rem;
-    padding: 0;
-    margin-top: 5px;
-    max-width: 72px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   .dock-icon { width: 44px; height: 44px; }
   .dock-icon img { width: 36px; height: 36px; }
   .dock-wrap { bottom: 10px; }

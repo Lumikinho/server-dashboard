@@ -86,3 +86,30 @@ export interface ApiResponse<T = unknown> {
   error?: string;
   services?: T;
 }
+
+export interface TodoItem {
+  id: string;
+  text: string;
+  done?: boolean;
+}
+
+export interface TodoWidget {
+  id: string;
+  type: 'todo';
+  title: string;
+  show?: boolean;
+  items: TodoItem[];
+}
+
+export type WidgetKey = 'battery' | 'cpu' | 'storage' | 'report' | 'dock' | 'todo';
+
+export interface DashboardConfig {
+  theme: 'dark' | 'light';
+  accent: string;
+  show: Record<WidgetKey, boolean>;
+  widgets: TodoWidget[];
+}
+
+export interface ConfigResponse {
+  config: DashboardConfig;
+}

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
-import { BASE, type Report, type Service, type SystemStatus } from '@server/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BASE, type DashboardConfig, type Report, type Service, type SystemStatus } from '@server/ui';
 
-/** Carrega services.json (a configuração usada pelo Caddy e pelo manager). */
+/** Carrega services.json (a configuração usada pelo Caddy e pelo manager) e
+ *  mantém em sincronia com o manager (poll + refetch ao focar a janela). */
 export function useServices(): Service[] {
   const [services, setServices] = useState<Service[]>([]);
   useEffect(() => {
     let stopped = false;
-    (async () => {
+    const fetchIt = async () => {
       try {
         const res = await fetch(BASE + '/services.json', { cache: 'no-store' });
         if (!res.ok) throw 0;
@@ -15,9 +16,15 @@ export function useServices(): Service[] {
       } catch {
         /* caddy fora */
       }
-    })();
+    };
+    fetchIt();
+    const id = setInterval(fetchIt, 15000);
+    const onFocus = () => void fetchIt();
+    window.addEventListener('focus', onFocus);
     return () => {
       stopped = true;
+      clearInterval(id);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
   return services;
@@ -66,4 +73,63 @@ export function useReport(eco: boolean): { report: Report | null; refresh: () =>
     return () => clearInterval(id);
   }, [eco, refresh]);
   return { report, refresh };
+}
+
+export interface DashboardConfigApi {
+  cfg: DashboardConfig | null;
+  update: (fn: (c: DashboardConfig) => DashboardConfig) => Promise<boolean>;
+}
+
+/** Configuração do dashboard (widgets/aparência) — lê o static gerado pelo manager
+ *  e grava de volta pelo proxy /dashboard/api/config. */
+export function useConfig(): DashboardConfigApi {
+  const [cfg, setCfg] = useState<DashboardConfig | null>(null);
+  const ref = useRef<DashboardConfig | null>(null);
+
+  const fetchIt = useCallback(async () => {
+    try {
+      const res = await fetch(BASE + '/dashboard-config.json', { cache: 'no-store' });
+      if (!res.ok) throw 0;
+      const d: DashboardConfig = await res.json();
+      ref.current = d;
+      setCfg(d);
+    } catch {
+      /* fora */
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchIt();
+    const id = setInterval(fetchIt, 15000);
+    const onFocus = () => void fetchIt();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [fetchIt]);
+
+  const update = useCallback(async (fn: (c: DashboardConfig) => DashboardConfig): Promise<boolean> => {
+    const cur = ref.current;
+    if (!cur) return false;
+    const next = fn(cur);
+    try {
+      const res = await fetch(BASE + '/dashboard/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+        cache: 'no-store',
+      });
+      if (!res.ok) throw 0;
+      const d = await res.json();
+      const saved: DashboardConfig = d.config || next;
+      ref.current = saved;
+      setCfg(saved);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  return { cfg, update };
 }

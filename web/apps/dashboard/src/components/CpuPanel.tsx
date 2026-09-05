@@ -10,7 +10,7 @@ export function CpuPanel({ c }: { c?: SystemStatus['cpu'] }) {
   const barCls = pct != null && pct >= 90 ? 'crit' : pct != null && pct >= 70 ? 'warn' : '';
 
   useEffect(() => {
-    if (ref.current) drawSpark(ref.current, cpu.history, '#38bdf8');
+    if (ref.current) drawSpark(ref.current, cpu.history);
   }, [cpu.history]);
 
   return (
