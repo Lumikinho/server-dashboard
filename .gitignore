@@ -1,0 +1,28 @@
+# Node (instalar deps uma vez só, na raiz de web/)
+web/node_modules/
+
+# Saídas de build (são deployadas para dentro do próprio projeto)
+dashboard/dist/
+manager/dist/
+
+# Estado em runtime — não versionar
+logs/
+dashboard/battery_history.json
+dashboard/samples.jsonl
+dashboard/services.json
+*.db
+
+# Filebrowser vive em /home/lumiko/filebrowser/ (fora do repo)
+filebrowser/filebrowser
+filebrowser/filebrowser.db
+filebrowser/admin_password
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs / temporários
+*.log
+*.tmp
+Caddyfile.tmp

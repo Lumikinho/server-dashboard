@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gerenciador de Serviços · Caddy</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: 80px;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+.container { max-width: 860px; margin: 0 auto; padding: 0 1.2rem; }
+
+.header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.6rem 1.2rem .4rem; flex-wrap: wrap; }
+.header h1 { font-size: 1.4rem; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+.header h1 small { display: block; font-size: .72rem; font-weight: 500; color: #666; letter-spacing: 0; margin-top: .25rem; }
+.header-actions { display: flex; gap: .5rem; }
+
+.btn {
+    background: #1e1e2e; color: #ddd; border: 1px solid #333;
+    border-radius: 9px; padding: .5rem 1rem; font-size: .8rem; cursor: pointer;
+    transition: border-color .15s, background .15s; white-space: nowrap;
+    touch-action: manipulation;
+}
+.btn:hover { border-color: #555; }
+.btn.primary { background: #00a4dc; border-color: #00a4dc; color: #fff; font-weight: 600; }
+.btn.primary:hover { background: #0090c2; }
+.btn.danger { background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.4); color: #fca5a5; }
+.btn.danger:hover { background: rgba(239,68,68,.2); }
+.btn.ghost { background: transparent; border-color: transparent; color: #888; }
+.btn.ghost:hover { color: #ddd; }
+
+.card {
+    background: #12121a; border: 1px solid #1e1e2e; border-radius: 14px;
+    padding: 1.4rem; margin-top: 1rem;
+}
+.card h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #666; margin-bottom: 1rem; }
+
+/* ---- form ---- */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+.field { display: flex; flex-direction: column; gap: .35rem; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: .75rem; color: #888; font-weight: 600; }
+.field input, .field textarea {
+    background: #0f0f17; border: 1px solid #2a2a3a; color: #eee;
+    border-radius: 9px; padding: .55rem .7rem; font-size: .85rem; font-family: inherit;
+}
+.field input:focus, .field textarea:focus { outline: none; border-color: #00a4dc; }
+.field .hint { font-size: .68rem; color: #555; }
+.field input[disabled] { opacity: .45; cursor: not-allowed; }
+.field-row { display: flex; align-items: center; gap: .5rem; }
+
+/* icon modes */
+.icon-modes { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .9rem; }
+.icon-mode-btn {
+    background: #0f0f17; border: 1px solid #2a2a3a; color: #aaa;
+    border-radius: 9px; padding: .4rem .75rem; font-size: .76rem; cursor: pointer;
+}
+.icon-mode-btn.active { border-color: #00a4dc; color: #fff; background: rgba(0,164,220,.12); }
+.icon-pane { display: none; margin-top: .85rem; }
+.icon-pane.show { display: block; }
+
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: .5rem; }
+.preset-item {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    background: #0f0f17; border: 2px solid #2a2a3a; border-radius: 10px; cursor: pointer;
+    transition: border-color .15s, transform .1s; padding: .35rem;
+}
+.preset-item img { width: 100%; height: 100%; object-fit: contain; }
+.preset-item.selected { border-color: #00a4dc; }
+.preset-item:hover { transform: scale(1.05); }
+.preset-item { touch-action: manipulation; }
+
+.icon-preview {
+    display: flex; align-items: center; gap: 1rem; margin-top: 1rem;
+    background: #0f0f17; border: 1px dashed #2a2a3a; border-radius: 12px; padding: .9rem;
+}
+.icon-preview .box {
+    width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(128,128,128,.1);
+}
+.icon-preview .box img { width: 44px; height: 44px; object-fit: contain; }
+.icon-preview .meta { font-size: .7rem; color: #666; line-height: 1.5; }
+.icon-preview .meta b { color: #aaa; font-size: .78rem; }
+
+.preview-errors { margin-top: .5rem; font-size: .72rem; color: #f87171; white-space: pre-wrap; }
+
+/* accent swatches */
+.accent-row { display: flex; align-items: center; gap: .5rem; margin-top: .9rem; flex-wrap: wrap; }
+.swatch { width: 26px; height: 26px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+.swatch.selected { border-color: #fff; }
+.swatch.auto {
+    background: conic-gradient(#22c55e,#00a4dc,#a855f7,#f59e0b,#ef4444,#06b6d4,#ec4899,#22c55e);
+}
+
+.form-actions { display: flex; gap: .6rem; margin-top: 1.2rem; align-items: center; }
+
+/* ---- list ---- */
+.services-head { display: flex; justify-content: space-between; align-items: center; margin-top: 1.4rem; }
+.services-head h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #666; }
+.service {
+    display: flex; align-items: center; gap: 1rem; padding: .9rem .2rem;
+    border-bottom: 1px solid #16161f;
+}
+.service:last-child { border-bottom: none; }
+.svc-icon {
+    width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-bg, rgba(128,128,128,.1)); border: 1px solid rgba(255,255,255,.06);
+}
+.svc-icon img { width: 34px; height: 34px; object-fit: contain; }
+.svc-info { flex: 1; min-width: 0; }
+.svc-name { font-weight: 600; color: #fff; font-size: .9rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.svc-badge { font-size: .62rem; padding: .12rem .45rem; border-radius: 20px; font-weight: 600; letter-spacing: .04em; }
+.svc-badge.managed { color: #38bdf8; background: rgba(56,189,248,.1); }
+.svc-badge.legado { color: #f59e0b; background: rgba(245,158,11,.1); }
+.svc-badge.maint { color: #fbbf24; background: rgba(251,191,36,.12); }
+.svc-badge.down { color: #ef4444; background: rgba(239,68,68,.1); }
+.svc-badge.off { color: #9ca3af; background: rgba(156,163,175,.12); }
+.svc-desc { font-size: .75rem; color: #666; margin-top: .15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svc-route { font-size: .72rem; color: #555; margin-top: .2rem; font-family: monospace; }
+.svc-route b { color: #888; }
+.svc-actions { display: flex; gap: .4rem; align-items: center; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.online { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.8); }
+.dot.offline { background: #ef4444; }
+.dot.maint { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,.5); }
+.dot.off { background: #6b7280; }
+.empty { color: #555; font-size: .82rem; text-align: center; padding: 1.2rem 0; }
+.toast {
+    position: fixed; top: 16px; right: 16px; z-index: 99;
+    background: #12121a; border: 1px solid #2a2a3a; border-radius: 10px;
+    padding: .7rem 1rem; font-size: .8rem; color: #eee;
+    max-width: 360px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+
+.footer { position: fixed; bottom: 0; left: 0; right: 0; background: #0a0a0f; border-top: 1px solid #14141d; padding: .7rem; text-align: center; font-size: .7rem; color: #444; }
+
+@media (max-width: 640px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; }
+    .field input, .field textarea { font-size: 16px; }
+    .header-actions { width: 100%; }
+    .header-actions .btn { flex: 1; padding: .6rem .5rem; }
+    .service { flex-wrap: wrap; gap: .7rem; }
+    .svc-actions { width: 100%; justify-content: flex-end; }
+    .svc-actions .btn { flex: none; font-size: .78rem; padding: .5rem .75rem; }
+    .form-actions { flex-wrap: wrap; }
+    .form-actions .btn.primary { flex: 1; }
+    .card { padding: 1.1rem; }
+    .toast { top: 12px; left: 12px; right: 12px; max-width: none; font-size: .82rem; }
+}
+@media (hover: none) {
+    .preset-item:hover, .icon-mode-btn:hover { transform: none; }
+    .btn:hover { border-color: #333; background: #1e1e2e; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Serviços do Caddy<small>acesso local · 127.0.0.1:8891 · não exposto pelo Caddy</small></h1>
+        <div class="header-actions">
+            <button class="btn" id="btnReload">Recarregar Caddy</button>
+            <button class="btn primary" id="btnNew">+ Novo serviço</button>
+        </div>
+    </div>
+
+    <div class="card" id="formCard" style="display:none">
+        <h2 id="formTitle">Novo serviço</h2>
+        <form id="svcForm">
+            <input type="hidden" name="editing" value="">
+            <div class="form-grid">
+                <div class="field">
+                    <label for="fName">Nome</label>
+                    <input id="fName" name="name" placeholder="ex.: Jellyfin" required>
+                </div>
+                <div class="field">
+                    <label for="fPort">Porta</label>
+                    <input id="fPort" name="port" type="number" min="1" max="65535" placeholder="ex.: 8096" required>
+                </div>
+                <div class="field">
+                    <label for="fRoute">Rota</label>
+                    <input id="fRoute" name="route" placeholder="ex.: /jellyfin/" required>
+                    <span class="hint">O Caddy vai criar <code>/rota</code> e <code>/rota/*</code></span>
+                </div>
+                <div class="field">
+                    <label for="fProcess">Processo (para o relatório)</label>
+                    <input id="fProcess" name="process" placeholder="ex.: jellyfin">
+                    <span class="hint">opcional · usado pelo sysinfo para monitorar</span>
+                </div>
+                <div class="field full">
+                    <label for="fDesc">Descrição</label>
+                    <input id="fDesc" name="desc" placeholder="ex.: Servidor de mídia">
+                </div>
+                <div class="field">
+                    <label for="fMaint" class="field-row" style="gap:.5rem;cursor:pointer">
+                        <input type="checkbox" id="fMaint" name="maintenance" value="on" style="width:16px;height:16px;accent-color:#f59e0b">
+                        Em manutenção
+                    </label>
+                    <span class="hint">mostra página de manutenção no lugar do serviço</span>
+                </div>
+            </div>
+
+            <div class="icon-modes" id="iconModes">
+                <button type="button" class="icon-mode-btn" data-mode="preset">Preset</button>
+                <button type="button" class="icon-mode-btn" data-mode="upload">Enviar arquivo</button>
+                <button type="button" class="icon-mode-btn" data-mode="url">URL</button>
+                <button type="button" class="icon-mode-btn" data-mode="codigo">Código SVG</button>
+            </div>
+
+            <div class="icon-pane" id="pane-preset">
+                <div class="preset-grid" id="presetGrid"></div>
+            </div>
+            <div class="icon-pane" id="pane-upload">
+                <input type="file" id="fIconFile" name="icon_file" accept=".svg,.png,.jpg,.jpeg,.webp,.gif,.avif">
+                <span class="hint" style="display:block;margin-top:.4rem">SVG é o ideal; PNG/JPG/WebP/GIF também funcionam — o dock padroniza todos em 44 px.</span>
+            </div>
+            <div class="icon-pane" id="pane-url">
+                <input type="text" id="fIconUrl" name="icon_url" placeholder="https://example.com/icone.svg">
+                <button type="button" class="btn" id="btnPreviewUrl" style="margin-top:.5rem">Pré-visualizar</button>
+            </div>
+            <div class="icon-pane" id="pane-codigo">
+                <textarea id="fIconCode" name="icon_code" rows="4" placeholder="<svg viewBox=…>…</svg>" style="width:100%"></textarea>
+                <button type="button" class="btn" id="btnPreviewCode" style="margin-top:.5rem">Pré-visualizar</button>
+            </div>
+
+            <input type="hidden" name="icon_mode" id="fIconMode" value="preset">
+            <input type="hidden" name="icon_preset" id="fIconPreset" value="servico.svg">
+
+            <div class="icon-preview">
+                <div class="box"><img id="previewImg" alt="ícone"></div>
+                <div class="meta"><b id="previewName">servico.svg</b><br>pré-visualizado em 64 px · exibido em 44 px no dock</div>
+            </div>
+            <div class="preview-errors" id="previewErrors"></div>
+
+            <div class="accent-row">
+                <span style="font-size:.75rem;color:#888">Cor de destaque:</span>
+                <button type="button" class="swatch auto selected" data-color="auto" title="automático"></button>
+                <button type="button" class="swatch" data-color="#22c55e"></button>
+                <button type="button" class="swatch" data-color="#00a4dc"></button>
+                <button type="button" class="swatch" data-color="#a855f7"></button>
+                <button type="button" class="swatch" data-color="#f59e0b"></button>
+                <button type="button" class="swatch" data-color="#ef4444"></button>
+                <button type="button" class="swatch" data-color="#06b6d4"></button>
+                <input type="hidden" name="accent" id="fAccent" value="auto">
+            </div>
+
+            <div class="form-actions">
+                <button class="btn primary" id="btnSubmit" type="submit">Adicionar serviço</button>
+                <button class="btn ghost" type="button" id="btnCancel">Cancelar</button>
+                <span id="formStatus" style="font-size:.75rem;color:#666"></span>
+            </div>
+        </form>
+    </div>
+
+    <div class="services-head">
+        <h2>Serviços configurados</h2>
+        <span id="svcCount" style="font-size:.72rem;color:#555"></span>
+    </div>
+    <div class="card" id="servicesCard">
+        <div id="servicesList" class="empty">carregando…</div>
+    </div>
+
+    <div class="footer">Caddy Manager · roda apenas em 127.0.0.1 — não tem rota no Caddyfile</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let services = [], presets = [], editingIdx = null, status = {};
+const LOGO = p => window.location.origin + '/' + (p || '');
+
+async function api(url, opts) {
+    const r = await fetch(url, opts);
+    let data = null;
+    try { data = await r.json(); } catch (e) { data = {}; }
+    if (!r.ok) { throw new Error(data.error || ('HTTP ' + r.status)); }
+    return data;
+}
+
+function toast(msg, ok) {
+    const t = $('formStatus');
+    if (t) { t.textContent = msg; t.style.color = ok === false ? '#f87171' : '#4ade80'; }
+}
+
+/* ---- toasts for list-level operations ---- */
+let listToastEl = null;
+function notify(msg, ok = true) {
+    if (!listToastEl) {
+        listToastEl = document.createElement('div');
+        listToastEl.className = 'toast';
+        document.body.appendChild(listToastEl);
+    }
+    listToastEl.style.borderColor = ok ? '#1f3' : '#f33';
+    listToastEl.textContent = msg;
+    clearTimeout(listToastEl._t);
+    listToastEl._t = setTimeout(() => listToastEl.remove() & (listToastEl = null), ok ? 3500 : 8000);
+}
+
+/* ---------- services list ---------- */
+async function load() {
+    try {
+        const d = await api('/api/services');
+        services = d.services || [];
+        renderList();
+        checkStatus();
+    } catch (e) { notify('Falha ao listar: ' + e.message, false); }
+}
+
+function renderList() {
+    const box = $('servicesList');
+    $('svcCount').textContent = services.length + ' serviço(s)';
+    if (!services.length) { box.className = 'empty'; box.textContent = 'Nenhum serviço ainda. Clique em “+ Novo serviço”.'; return; }
+    box.className = '';
+    box.innerHTML = '';
+    services.forEach((s, i) => {
+        const div = document.createElement('div');
+        div.className = 'service';
+        const st = status[s.route];
+        const maint = !!s.maintenance;
+        const off = s.enabled === false;
+        const dotCls = off ? 'off'
+            : (maint ? 'maint'
+                : (st === undefined ? '' : (st ? 'online' : 'offline')));
+        const badge = s.managed === false
+            ? '<span class="svc-badge legado">manual</span>'
+            : '<span class="svc-badge managed">novo · gerenciado</span>';
+        const offBadge = off ? '<span class="svc-badge off">desativado</span>' : '';
+        const maintBadge = maint ? '<span class="svc-badge maint">em manutenção</span>' : '';
+        const dim = (maint || off) ? ';filter:grayscale(1);opacity:.4' : '';
+        const name = maint ? escapeHtml(s.name) + ' · em manutenção' : escapeHtml(s.name);
+        div.innerHTML = `
+            <span class="svc-icon" style="--accent-bg:${s.accentBg || 'rgba(128,128,128,.1)'}${dim}">
+                <img src="${LOGO(s.logo)}" alt="">
+            </span>
+            <div class="svc-info">
+                <div class="svc-name">${name} ${badge} ${offBadge} ${maintBadge} <span class="dot ${dotCls}"></span></div>
+                <div class="svc-desc">${s.desc || ''}</div>
+                <div class="svc-route">
+                    ${off ? 'rota desativada — sem proxy'
+                          : (maint ? 'em manutenção — página de manutenção em ' : 'rota ')}<b>${s.route}</b> → <b>localhost:${s.port}</b>
+                </div>
+            </div>
+            <div class="svc-actions">
+                <button class="btn ${off ? 'primary' : 'ghost'}" data-i="${i}" data-act="toggle">${off ? 'Reativar' : 'Desativar'}</button>
+                <button class="btn ghost" data-i="${i}" data-act="edit">Editar</button>
+                <button class="btn danger" data-i="${i}" data-act="del">Remover</button>
+            </div>`;
+        box.appendChild(div);
+    });
+    box.querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', onAction));
+}
+
+async function checkStatus() {
+    try {
+        status = await api('/api/check');
+        renderList();
+    } catch (e) { /* caddy fora -> deixa sem status */ }
+}
+let statusTimer = setInterval(checkStatus, 20000);
+
+async function onAction(ev) {
+    const i = +ev.target.dataset.i;
+    if (ev.target.dataset.act === 'toggle') {
+        toggleEnabled(i);
+        return;
+    }
+    if (ev.target.dataset.act === 'del') {
+        const s = services[i];
+        if (s.managed === false) { notify('Este serviço foi configurado manualmente no Caddyfile. Remova o bloco dele do Caddyfile e depois apague aqui.', false); return; }
+        if (!confirm('Remover "' + s.name + '" (rota ' + s.route + ')?')) return;
+        try {
+            const d = await api('/api/services/' + i, { method: 'DELETE' });
+            services = d.services;
+            notify(d.message || 'Removido');
+            renderList();
+        } catch (e) { notify(e.message, false); }
+        return;
+    }
+    editService(i);
+}
+
+async function toggleEnabled(i) {
+    const s = services[i];
+    const target = s.enabled === false;
+    try {
+        const d = await api('/api/services/' + i, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: target })
+        });
+        services = d.services;
+        notify(d.message, d.ok !== false);
+        renderList();
+    } catch (e) { notify(e.message, false); }
+}
+
+function escapeHtml(str) {
+    return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/* ---------- form ---------- */
+function resetForm() {
+    $('svcForm').reset();
+    editingIdx = null;
+    $('fName').disabled = $('fRoute').disabled = $('fPort').disabled = $('fProcess').disabled = false;
+    $('fMaint').checked = false;
+    $('fAccent').value = 'auto';
+    selectSwatch('auto');
+    setIconMode(presets.includes('servico.svg') ? 'preset' : 'preset');
+    selectPreset('servico.svg');
+    $('previewErrors').textContent = '';
+    $('formStatus').textContent = '';
+    $('formTitle').textContent = 'Novo serviço';
+    $('btnSubmit').textContent = 'Adicionar serviço';
+    updatePreview();
+}
+
+function editService(i) {
+    const s = services[i];
+    editingIdx = i;
+    $('fName').value = s.name || '';
+    $('fRoute').value = s.route || '';
+    $('fPort').value = s.port || '';
+    $('fDesc').value = s.desc || '';
+    $('fProcess').value = s.process || '';
+    $('fMaint').checked = !!s.maintenance;
+    $('fAccent').value = s.accent || 'auto';
+    selectSwatch(s.accent || 'auto');
+    $('formTitle').textContent = 'Editar · ' + s.name;
+    $('btnSubmit').textContent = 'Salvar alterações';
+    const curLogo = s.logo;
+    if (curLogo && curLogo.startsWith('logos/presets/')) {
+        const base = curLogo.split('/').pop();
+        setIconMode('preset');
+        selectPreset(base);
+    } else {
+        setIconMode('atual');
+        currentLogoForMode = curLogo;
+        updatePreview();
+    }
+    if (s.managed === false) {
+        $('fRoute').disabled = true;
+        $('fPort').disabled = true;
+    } else {
+        $('fRoute').disabled = $('fPort').disabled = false;
+    }
+    $('formCard').style.display = 'block';
+    $('formCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+let currentLogoForMode = null;
+
+function setIconMode(mode) {
+    $('fIconMode').value = mode;
+    document.querySelectorAll('.icon-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    document.querySelectorAll('.icon-pane').forEach(p => p.classList.toggle('show', p.id === 'pane-' + mode));
+    updatePreview();
+    $('previewErrors').textContent = '';
+}
+
+function selectPreset(name) {
+    $('fIconPreset').value = name;
+    document.querySelectorAll('.preset-item').forEach(el => el.classList.toggle('selected', el.dataset.preset === name));
+    updatePreview();
+}
+
+function updatePreview() {
+    const mode = $('fIconMode').value;
+    const img = $('previewImg');
+    $('previewErrors').textContent = '';
+    let src = null, label = '';
+    if (mode === 'atual') { src = currentLogoForMode ? LOGO(currentLogoForMode) : null; label = currentLogoForMode || ''; }
+    else if (mode === 'preset') { src = LOGO('logos/presets/' + $('fIconPreset').value); label = $('fIconPreset').value; }
+    else if (mode === 'url') {
+        const u = $('fIconUrl').value.trim();
+        src = u; label = u;
+        if (u && !/^https?:\/\//i.test(u)) { $('previewErrors').textContent = 'URL precisa começar com http(s)://'; src = null; }
+    } else if (mode === 'codigo') {
+        const code = $('fIconCode').value.trim();
+        if (code) {
+            try {
+                const blob = new Blob([code], { type: 'image/svg+xml' });
+                src = URL.createObjectURL(blob); label = 'svg inline';
+            } catch (e) { $('previewErrors').textContent = 'erro no SVG'; }
+        }
+    } else if (mode === 'upload') {
+        const f = $('fIconFile').files[0];
+        if (f) { src = URL.createObjectURL(f); label = f.name; }
+    }
+    if (src) { img.src = src; $('previewName').textContent = label; }
+    else { img.removeAttribute('src'); $('previewName').textContent = 'sem ícone'; }
+}
+
+function selectSwatch(color) {
+    $('fAccent').value = color;
+    document.querySelectorAll('.swatch').forEach(el => el.classList.toggle('selected', el.dataset.color === color));
+    const box = document.querySelector('.icon-preview .box');
+    if (color === 'auto') {
+        const port = parseInt($('fPort').value) || 0;
+        const palette = ['#22c55e','#00a4dc','#a855f7','#f59e0b','#ef4444','#06b6d4','#ec4899','#8b5cf6','#84cc16','#f97316'];
+        box.style.background = 'rgba(' + hexRgb(palette[port % palette.length]).join(',') + ',.1)';
+    } else {
+        box.style.background = 'rgba(' + hexRgb(color).join(',') + ',.15)';
+    }
+}
+function hexRgb(h) {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h);
+    return m ? [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)] : [128,128,128];
+}
+
+/* presets grid */
+async function loadPresets() {
+    try {
+        const d = await api('/api/presets');
+        presets = d.presets || [];
+        const grid = $('presetGrid');
+        grid.innerHTML = '';
+        presets.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'preset-item' + (p === $('fIconPreset').value ? ' selected' : '');
+            el.dataset.preset = p;
+            el.title = p;
+            el.innerHTML = `<img src="${LOGO('logos/presets/' + p)}" alt="${p}">`;
+            el.addEventListener('click', () => selectPreset(p));
+            grid.appendChild(el);
+        });
+    } catch (e) { /* ignore */ }
+}
+
+/* form submit */
+$('svcForm').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const fd = new FormData($('svcForm'));
+    if (editingIdx != null) fd.set('editing', '' + editingIdx);
+    fd.set('icon_mode', $('fIconMode').value);
+    const mode = $('fIconMode').value;
+    if (mode === 'preset') fd.set('icon_preset', $('fIconPreset').value);
+    if (mode === 'upload' && !$('fIconFile').files[0]) {
+        $('previewErrors').textContent = 'Selecione um arquivo de ícone.';
+        return;
+    }
+    const submit = $('btnSubmit');
+    submit.disabled = true; submit.textContent = 'Salvando…';
+    try {
+        const url = editingIdx == null ? '/api/services' : '/api/services/' + editingIdx;
+        const d = await api(url, { method: editingIdx == null ? 'POST' : 'PUT', body: fd });
+        services = d.services;
+        toast(d.ok === false ? (d.message || 'Salvo, mas o reload falhou') : (d.message || 'Salvo ✓'), d.ok);
+        resetForm();
+        renderList();
+        $('formCard').style.display = 'none';
+        if (d.ok === false) notify('Caddyfile alterado mas o reload falhou: ' + d.message, false);
+    } catch (e) {
+        $('previewErrors').textContent = e.message;
+        toast(e.message, false);
+    } finally {
+        submit.disabled = false; submit.textContent = editingIdx == null ? 'Adicionar serviço' : 'Salvar alterações';
+    }
+});
+
+/* controls wiring */
+$('btnNew').addEventListener('click', () => { resetForm(); $('formCard').style.display = 'block'; $('formCard').scrollIntoView({ behavior: 'smooth' }); });
+$('btnCancel').addEventListener('click', () => { $('formCard').style.display = 'none'; $('formStatus').textContent = ''; });
+$('btnReload').addEventListener('click', async () => {
+    $('btnReload').disabled = true;
+    try {
+        const d = await api('/api/reload', { method: 'POST' });
+        notify(d.message, d.ok !== false);
+    } catch (e) { notify(e.message, false); }
+    finally { $('btnReload').disabled = false; }
+});
+document.querySelectorAll('.swatch').forEach(el => el.addEventListener('click', () => selectSwatch(el.dataset.color)));
+document.querySelectorAll('.icon-mode-btn').forEach(b => b.addEventListener('click', () => setIconMode(b.dataset.mode)));
+$('btnPreviewUrl').addEventListener('click', updatePreview);
+$('btnPreviewCode').addEventListener('click', updatePreview);
+$('fIconUrl').addEventListener('input', debounce(updatePreview, 400));
+$('fIconCode').addEventListener('input', debounce(updatePreview, 400));
+$('fIconFile').addEventListener('change', updatePreview);
+$('fPort').addEventListener('input', () => { if ($('fAccent').value === 'auto') selectSwatch('auto'); });
+$('fName').addEventListener('input', () => {
+    if ($('fAccent').value === 'auto' && $('fIconMode').value === 'preset') updatePreview();
+});
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+loadPresets();
+resetForm();
+load();
+</script>
+</body>
+</html>

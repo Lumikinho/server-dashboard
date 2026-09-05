@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Server Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-bottom: 130px;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
+        .header { text-align: center; padding: 2.2rem 1rem 0.5rem; }
+        .header h1 { font-size: 1.8rem; font-weight: 600; color: #fff; letter-spacing: -0.5px; }
+        .header p { color: #666; margin-top: 0.4rem; font-size: 0.9rem; }
+        .status-bar { display: flex; gap: 1.5rem; margin-top: 1rem; flex-wrap: wrap; justify-content: center; align-items: center; }
+        .status-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: #888; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .status-item.eco-btn {
+            cursor: pointer; user-select: none; touch-action: manipulation;
+            border: 1px solid #2a2a3a; background: #12121a;
+            padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: 600;
+            transition: border-color 0.2s, color 0.2s, background 0.2s;
+        }
+        .status-item.eco-btn:active { transform: scale(0.96); }
+        .status-item.eco-btn.active { border-color: #84cc16; color: #a3e635; background: rgba(132,204,22,0.1); }
+
+        body.eco .status-dot { animation: none; opacity: 0.5; }
+        body.eco .dock { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(18,18,26,0.94); }
+        body.eco .batt-fill, body.eco .bar > div { transition: none; }
+        body.eco #battChart, body.eco #cpuChart { opacity: 0.7; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.2rem;
+            padding: 1.5rem 2rem;
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .panel {
+            background: #12121a;
+            border: 1px solid #1e1e2e;
+            border-radius: 14px;
+            padding: 1.4rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .panel h2 { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 1rem; }
+
+        .batt-top { display: flex; align-items: center; gap: 1rem; }
+        .batt-icon {
+            width: 74px; height: 36px; border: 2px solid #333; border-radius: 8px;
+            position: relative; padding: 3px; flex-shrink: 0;
+        }
+        .batt-icon::after {
+            content: ''; position: absolute; right: -8px; top: 50%;
+            transform: translateY(-50%); width: 5px; height: 16px;
+            background: #333; border-radius: 0 3px 3px 0;
+        }
+        .batt-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #22c55e, #4ade80); transition: width 0.5s; min-width: 4px; }
+        .batt-fill.low { background: linear-gradient(90deg, #ef4444, #f87171); }
+        .batt-fill.mid { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .batt-pct { font-size: 2.2rem; font-weight: 700; color: #fff; }
+        .batt-state { font-size: 0.8rem; color: #888; margin-top: 0.2rem; }
+        .batt-state .charging { color: #22c55e; }
+
+        .batt-meta { display: flex; gap: 1.2rem; margin-top: 1rem; flex-wrap: wrap; }
+        .batt-meta div { font-size: 0.75rem; color: #666; }
+        .batt-meta span { display: block; font-size: 0.95rem; color: #ddd; margin-top: 0.15rem; }
+
+        #battChart { width: 100%; height: 110px; margin-top: 1rem; display: block; }
+        #cpuChart { width: 100%; height: 80px; margin-top: 0.8rem; display: block; }
+        .chart-label { font-size: 0.7rem; color: #444; margin-top: 0.3rem; }
+
+        .disk { margin-bottom: 1rem; }
+        .disk:last-child { margin-bottom: 0; }
+        .disk-head { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.35rem; }
+        .disk-head .mount { color: #ddd; font-family: monospace; }
+        .disk-head .vals { color: #666; }
+        .bar { height: 8px; background: #1e1e2e; border-radius: 5px; overflow: hidden; }
+        .bar > div { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #00a4dc, #38bdf8); transition: width 0.5s; }
+        .bar > div.warn { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .bar > div.crit { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+        /* macOS dock */
+        .dock-wrap {
+            position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+            z-index: 50;
+        }
+        .dock {
+            display: flex; align-items: flex-end; gap: 10px;
+            background: rgba(255,255,255,0.08);
+            -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 22px;
+            padding: 10px 14px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .dock-item {
+            position: relative; display: flex; flex-direction: column; align-items: center;
+            text-decoration: none; cursor: pointer;
+            transition: transform 0.15s ease;
+            transform-origin: bottom center;
+        }
+        .dock-item { touch-action: manipulation; }
+        .dock-item:hover { transform: scale(1.35) translateY(-6px); }
+        .dock-item:hover + .dock-item, .dock-item:has(+ .dock-item:hover) { transform: scale(1.15) translateY(-3px); }
+        .dock-icon {
+            width: 52px; height: 52px; border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--accent-bg); color: var(--accent);
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: filter 0.25s, opacity 0.25s;
+        }
+        .dock-label {
+            position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.75); color: #fff; font-size: 0.72rem;
+            padding: 0.25rem 0.6rem; border-radius: 6px; white-space: nowrap;
+            opacity: 0; pointer-events: none; transition: opacity 0.15s;
+        }
+        .dock-item:hover .dock-label { opacity: 1; }
+
+        .dock-item.offline { cursor: not-allowed; }
+        .dock-item.offline:hover { transform: none; }
+        .dock-item.offline:active { transform: none; }
+        .dock-item.offline .dock-icon { filter: grayscale(1); opacity: 0.4; }
+        .dock-icon { background: transparent; border: none; }
+        .dock-icon img { width: 44px; height: 44px; object-fit: contain; }
+        .dock-item.offline .dock-icon img { filter: grayscale(1); }
+        .dock-item.offline .dock-label { color: #999; }
+
+        .dock-item.maintenance { cursor: wait; }
+        .dock-item.maintenance:hover { transform: none; }
+        .dock-item.maintenance:active { transform: none; }
+        .dock-item.maintenance .dock-icon { filter: grayscale(1); opacity: 0.35; }
+        .dock-item.maintenance .dock-icon img { filter: grayscale(1); }
+        .dock-item.maintenance .dock-label { color: #fbbf24; }
+
+        .report-wrap { max-width: 1000px; width: 100%; padding: 0 2rem; }
+        .report-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.6rem; }
+        .report-head h2 { margin-bottom: 0; }
+        .report-actions { display: flex; gap: 0.5rem; }
+        .btn {
+            background: #1e1e2e; color: #ddd; border: 1px solid #333;
+            border-radius: 8px; padding: 0.4rem 0.9rem; font-size: 0.8rem; cursor: pointer;
+        }
+        .btn:hover { border-color: #555; }
+        .btn.primary { background: #00a4dc; border-color: #00a4dc; color: #fff; font-weight: 600; }
+        .btn.primary:hover { background: #0090c2; }
+        .report-sub { font-size: 0.72rem; color: #555; margin-bottom: 0.8rem; }
+        .table-wrap { overflow-x: auto; }
+        .report-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .report-table th { text-align: left; color: #666; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.6rem; border-bottom: 1px solid #1e1e2e; }
+        .report-table td { padding: 0.55rem 0.6rem; border-bottom: 1px solid #16161f; color: #ccc; }
+        .report-table tr:last-child td { border-bottom: none; }
+        .pill { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; padding: 0.15rem 0.55rem; border-radius: 20px; }
+        .pill.on { color: #22c55e; background: rgba(34,197,94,0.1); }
+        .pill.off { color: #ef4444; background: rgba(239,68,68,0.1); }
+        .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .mono { font-family: monospace; font-size: 0.78rem; }
+        .mini-bar { height: 5px; background: #1e1e2e; border-radius: 4px; margin-top: 0.25rem; min-width: 70px; }
+        .mini-bar > div { height: 100%; border-radius: 4px; background: #38bdf8; }
+
+        .footer { padding: 1rem; text-align: center; color: #333; font-size: 0.75rem; }
+
+        @media (max-width: 600px) {
+            .grid { grid-template-columns: 1fr; padding: 0.8rem; gap: 0.9rem; }
+            .panel { padding: 1.1rem; }
+            .header h1 { font-size: 1.4rem; }
+            .status-bar { gap: 1rem; }
+            .report-wrap { padding: 0 1rem; }
+            .report-head { flex-direction: column; align-items: flex-start; }
+            .report-actions { width: 100%; }
+            .report-actions .btn { flex: 1; padding: 0.6rem; }
+            .report-table { font-size: 0.76rem; }
+            .report-table th, .report-table td { padding: 0.5rem 0.4rem; }
+            body { padding-bottom: 160px; }
+        }
+
+        @media (hover: none), (max-width: 600px) {
+            .dock-item:hover { transform: none; }
+            .dock-item:hover + .dock-item, .dock-item:has(+ .dock-item:hover) { transform: none; }
+            .dock-item:active { transform: scale(1.18) translateY(-4px); }
+            .dock-label {
+                position: static; transform: none; opacity: 1;
+                background: transparent; color: #bbb; font-size: 0.6rem;
+                padding: 0; margin-top: 5px;
+                max-width: 72px; overflow: hidden; text-overflow: ellipsis;
+            }
+            .dock-icon { width: 44px; height: 44px; }
+            .dock-icon img { width: 36px; height: 36px; }
+            .dock-wrap { bottom: 10px; max-width: calc(100vw - 16px); }
+            .dock { padding: 8px 10px; gap: 9px; overflow-x: auto; scrollbar-width: none; }
+            .dock::-webkit-scrollbar { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Server</h1>
+        <p>100.107.93.53</p>
+        <div class="status-bar">
+            <div class="status-item"><div class="status-dot"></div><span>Online</span></div>
+            <div class="status-item" id="uptime">—</div>
+            <div class="status-item eco-btn" id="ecoBtn" role="button" tabindex="0" aria-pressed="false" title="Alternar modo economia de bateria">
+                <span id="ecoIcon">⚡</span><span id="ecoLabel">Economia</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="panel">
+            <h2>Bateria</h2>
+            <div class="batt-top">
+                <div class="batt-icon"><div class="batt-fill" id="battFill" style="width:0%"></div></div>
+                <div>
+                    <div class="batt-pct" id="battPct">—</div>
+                    <div class="batt-state" id="battState">carregando dados…</div>
+                </div>
+            </div>
+            <div class="batt-meta">
+                <div>Tensão<span id="battVolt">—</span></div>
+                <div>Corrente<span id="battCurr">—</span></div>
+                <div>Temperatura<span id="battTemp">—</span></div>
+                <div>Saúde<span id="battHealth">—</span></div>
+            </div>
+            <canvas id="battChart" width="600" height="220"></canvas>
+            <div class="chart-label" id="chartLabel">histórico da bateria</div>
+        </div>
+
+        <div class="panel">
+            <h2>CPU</h2>
+            <div class="batt-top">
+                <div style="font-size:2.2rem;font-weight:700;color:#fff" id="cpuPct">—</div>
+                <div>
+                    <div class="batt-state" id="cpuCores">— núcleos</div>
+                    <div class="batt-state" id="cpuLoad">load —</div>
+                </div>
+            </div>
+            <div class="bar" style="margin-top:1rem"><div id="cpuBar" style="width:0%"></div></div>
+            <canvas id="cpuChart" width="600" height="160"></canvas>
+            <div class="chart-label">uso da CPU · últimos ~10 min</div>
+        </div>
+
+        <div class="panel">
+            <h2>Armazenamento</h2>
+            <div id="disks"><div style="color:#555;font-size:0.85rem">carregando…</div></div>
+        </div>
+    </div>
+
+    <div class="report-wrap">
+        <div class="panel">
+            <div class="report-head">
+                <h2>Relatório dos serviços</h2>
+                <div class="report-actions">
+                    <button class="btn" id="btnRefresh">Atualizar</button>
+                    <button class="btn primary" id="btnExport">Exportar JSON</button>
+                </div>
+            </div>
+            <div class="report-sub" id="reportSub">—</div>
+            <div class="table-wrap"><table class="report-table" id="reportTable">
+                <thead><tr><th>Serviço</th><th>Status</th><th>CPU</th><th>Memória</th><th>Rota</th></tr></thead>
+                <tbody><tr><td colspan="5" style="color:#555">carregando…</td></tr></tbody>
+            </table></div>
+        </div>
+    </div>
+
+    <div class="dock-wrap">
+        <div class="dock" id="dock"></div>
+    </div>
+
+    <div class="footer">Tailscale Network</div>
+
+    <script>
+        const BASE = window.location.origin;
+        const $ = id => document.getElementById(id);
+
+        let eco = localStorage.getItem('eco') === '1';
+
+        function fmtUptime(s) {
+            if (s == null) return '—';
+            const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+            return (d ? d + 'd ' : '') + h + 'h ' + m + 'm online';
+        }
+
+        function drawChart(history) {
+            const cv = $('battChart'), ctx = cv.getContext('2d');
+            const W = cv.width, H = cv.height;
+            ctx.clearRect(0, 0, W, H);
+            if (!history || history.length < 2) {
+                ctx.fillStyle = '#444'; ctx.font = '24px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('coletando histórico…', W / 2, H / 2);
+                return;
+            }
+            const pts = history.slice(-120);
+            const min = Math.min(...pts.map(p => p[1])), max = Math.max(...pts.map(p => p[1]));
+            const lo = Math.max(0, Math.floor(min - 5)), hi = Math.min(100, Math.ceil(max + 5)) || 100;
+            const X = i => 8 + i * (W - 16) / (pts.length - 1);
+            const Y = v => H - 14 - (v - lo) / ((hi - lo) || 1) * (H - 28);
+
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+            [lo, hi].forEach(v => {
+                ctx.beginPath(); ctx.moveTo(8, Y(v)); ctx.lineTo(W - 8, Y(v)); ctx.stroke();
+                ctx.fillStyle = '#555'; ctx.font = '18px sans-serif'; ctx.textAlign = 'left';
+                ctx.fillText(v + '%', 10, Y(v) - 4);
+            });
+
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, 'rgba(34,197,94,0.45)');
+            grad.addColorStop(1, 'rgba(34,197,94,0.02)');
+            ctx.beginPath(); ctx.moveTo(X(0), Y(pts[0][1]));
+            pts.forEach((p, i) => ctx.lineTo(X(i), Y(p[1])));
+            ctx.lineTo(X(pts.length - 1), H - 8); ctx.lineTo(X(0), H - 8); ctx.closePath();
+            ctx.fillStyle = grad; ctx.fill();
+
+            ctx.beginPath(); ctx.moveTo(X(0), Y(pts[0][1]));
+            pts.forEach((p, i) => ctx.lineTo(X(i), Y(p[1])));
+            ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.stroke();
+
+            const lx = X(pts.length - 1), ly = Y(pts[pts.length - 1][1]);
+            ctx.beginPath(); ctx.arc(lx, ly, 6, 0, 7); ctx.fillStyle = '#4ade80'; ctx.fill();
+        }
+
+        async function refreshSystem() {
+            try {
+                const res = await fetch(BASE + '/system/status', { cache: 'no-store' });
+                if (!res.ok) throw 0;
+                const d = await res.json();
+                const b = d.battery || {};
+
+                $('battPct').textContent = b.pct != null ? b.pct + '%' : '—';
+                const fill = $('battFill');
+                fill.style.width = (b.pct || 0) + '%';
+                fill.className = 'batt-fill' + (b.pct != null && b.pct <= 20 ? ' low' : b.pct < 50 ? ' mid' : '');
+                $('battState').innerHTML = b.charging
+                    ? '<span class="charging">● carregando</span> · ' + (b.status || '')
+                    : (b.status || '—');
+                $('battVolt').textContent = b.voltage_v != null ? b.voltage_v + ' V' : '—';
+                $('battCurr').textContent = b.current_ma != null ? b.current_ma + ' mA' : '—';
+                $('battTemp').textContent = b.temp_c != null ? b.temp_c + ' °C' : '—';
+                $('battHealth').textContent = (b.health || '—') + (b.tech ? ' · ' + b.tech : '');
+                $('uptime').textContent = fmtUptime(d.uptime_s);
+                drawChart(d.history);
+                const n = (d.history || []).length;
+                $('chartLabel').textContent = n > 1 ? `histórico da bateria · ${n} amostras · ~1/min` : 'histórico da bateria';
+
+                const c = d.cpu || {};
+                $('cpuPct').textContent = c.pct != null ? c.pct + '%' : '—';
+                const cb = $('cpuBar');
+                cb.style.width = (c.pct || 0) + '%';
+                cb.className = c.pct >= 90 ? 'crit' : c.pct >= 70 ? 'warn' : '';
+                $('cpuCores').textContent = (c.cores || '—') + ' núcleos';
+                $('cpuLoad').textContent = c.load1 != null ? `load ${c.load1} ${c.load5} ${c.load15}` : 'load —';
+                drawSpark('cpuChart', c.history, '#38bdf8');
+
+                const box = $('disks'); box.innerHTML = '';
+                (d.storage || []).forEach(s => {
+                    const cls = s.pct >= 90 ? 'crit' : s.pct >= 75 ? 'warn' : '';
+                    const el = document.createElement('div');
+                    el.className = 'disk';
+                    el.innerHTML = `<div class="disk-head"><span class="mount">${s.mount}</span><span class="vals">${s.used_gb} / ${s.total_gb} GB · ${s.pct}%</span></div><div class="bar"><div class="${cls}" style="width:${s.pct}%"></div></div>`;
+                    box.appendChild(el);
+                });
+            } catch {
+                $('battState').textContent = 'sysinfo indisponível';
+            }
+        }
+
+        async function ping(url) {
+            try {
+                const res = await fetch(BASE + url, { method: 'GET', cache: 'no-store' });
+                return res.ok;
+            } catch { return false; }
+        }
+
+        async function watchDock(item) {
+            const label = item.querySelector('.dock-label');
+            const base = label.textContent;
+            const maint = item.dataset.maintenance === '1';
+            const delay = () => document.body.classList.contains('eco') ? 60000 : 15000;
+            while (true) {
+                if (maint) {
+                    await new Promise(r => setTimeout(r, delay()));
+                    continue;
+                }
+                const ok = await ping(item.dataset.check);
+                item.classList.toggle('offline', !ok);
+                label.textContent = ok ? base : base + ' · offline';
+                await new Promise(r => setTimeout(r, delay()));
+            }
+        }
+
+        async function renderDock() {
+            const dock = $('dock');
+            try {
+                const res = await fetch(BASE + '/services.json', { cache: 'no-store' });
+                const { services } = await res.json();
+                dock.innerHTML = '';
+                (services || []).filter(s => s.enabled !== false).forEach(s => {
+                    const a = document.createElement('a');
+                    a.href = s.route;
+                    a.className = 'dock-item';
+                    a.dataset.check = s.route;
+                    a.dataset.maintenance = s.maintenance ? '1' : '0';
+                    a.style.setProperty('--accent', s.accent || '#888');
+                    a.style.setProperty('--accent-bg', s.accentBg || 'rgba(128,128,128,0.12)');
+                    const maint = !!s.maintenance;
+                    a.classList.toggle('maintenance', maint);
+                    a.title = maint ? (s.name + ' · em manutenção') : (s.desc || s.name);
+                    a.innerHTML = `<span class="dock-label">${s.name}${maint ? ' · em manutenção' : ''}</span>
+                        <span class="dock-icon"><img src="${s.logo}" alt="${s.name}"></span>`;
+                    a.addEventListener('click', e => {
+                        if (a.classList.contains('offline')) e.preventDefault();
+                    });
+                    dock.appendChild(a);
+                    watchDock(a);
+                });
+            } catch {
+                dock.innerHTML = '<span style="color:#666;font-size:0.8rem">services.json indisponível</span>';
+            }
+        }
+
+        function drawSpark(id, history, color) {
+            const cv = $(id), ctx = cv.getContext('2d');
+            const W = cv.width, H = cv.height;
+            ctx.clearRect(0, 0, W, H);
+            if (!history || history.length < 2) {
+                ctx.fillStyle = '#444'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('coletando…', W / 2, H / 2);
+                return;
+            }
+            const pts = history.slice(-120);
+            const max = Math.max(10, Math.ceil(Math.max(...pts.map(p => p[1])) + 5));
+            const X = i => 6 + i * (W - 12) / (pts.length - 1);
+            const Y = v => H - 10 - v / max * (H - 20);
+            ctx.beginPath(); ctx.moveTo(X(0), Y(pts[0][1]));
+            pts.forEach((p, i) => ctx.lineTo(X(i), Y(p[1])));
+            ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.stroke();
+            const lx = X(pts.length - 1), ly = Y(pts[pts.length - 1][1]);
+            ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 7); ctx.fillStyle = color; ctx.fill();
+        }
+
+        let lastReport = null;
+
+        function fmtMem(mb) {
+            if (mb == null) return '—';
+            return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : mb.toFixed(0) + ' MB';
+        }
+
+        async function fetchReport() {
+            const tb = document.querySelector('#reportTable tbody');
+            try {
+                const res = await fetch(BASE + '/system/report', { cache: 'no-store' });
+                if (!res.ok) throw 0;
+                const d = await res.json();
+                lastReport = d;
+                const m = d.memory || {};
+                const b = d.battery || {};
+                const dt = new Date(d.ts * 1000).toLocaleString('pt-BR');
+                const batt = b.pct != null ? ` · bateria ${b.pct}%${b.charging ? ' ⚡' : ''}` : '';
+                $('reportSub').textContent = `${d.host} · ${dt}${batt} · RAM total ${fmtMem(m.total_mb)} · livre ${fmtMem(m.avail_mb)}`;
+                tb.innerHTML = '';
+                (d.services || []).forEach(s => {
+                    const tr = document.createElement('tr');
+                    const up = s.running && s.http_ok;
+                    const status = s.running
+                        ? (s.http_ok ? '<span class="pill on"><span class="dot"></span>online</span>'
+                                     : '<span class="pill on"><span class="dot"></span>rodando*</span>')
+                        : '<span class="pill off"><span class="dot"></span>offline</span>';
+                    const cpu = s.cpu_pct != null ? s.cpu_pct + '%' : '—';
+                    const mem = s.running ? `${fmtMem(s.mem_mb)}${s.mem_pct != null ? ' · ' + s.mem_pct + '%' : ''}` : '—';
+                    const extra = s.running ? `<div style="font-size:0.7rem;color:#555">${s.procs} proc · pid ${s.pids.join(', ')}</div>` : '';
+                    tr.innerHTML = `<td><b style="color:#fff">${s.name}</b>${s.infra ? ' <span style="font-size:0.65rem;color:#555">infra</span>' : ''}${extra}</td>
+                        <td>${status}</td>
+                        <td class="mono">${cpu}<div class="mini-bar"><div style="width:${Math.min(100, s.cpu_pct || 0)}%"></div></div></td>
+                        <td class="mono">${mem}</td>
+                        <td class="mono" style="color:#666">${s.route || '—'}</td>`;
+                    tb.appendChild(tr);
+                });
+            } catch {
+                tb.innerHTML = '<tr><td colspan="5" style="color:#ef4444">falha ao carregar relatório</td></tr>';
+            }
+        }
+
+        function exportReport() {
+            if (!lastReport) { fetchReport(); return; }
+            const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `relatorio-servicos-${lastReport.ts}.json`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+        }
+
+        /* ---------- modo economia de bateria (sinais reais do dispositivo) ---------- */
+        let sysTimer = null, repTimer = null;
+        let autoEco = false, override = null, battWatcher = null;
+
+        function applyEco() {
+            document.body.classList.toggle('eco', eco);
+            const active = eco && override == null;
+            $('ecoLabel').textContent = eco ? (active ? 'Economia automática' : 'Economia ativa') : 'Economia';
+            $('ecoBtn').classList.toggle('active', eco);
+            $('ecoBtn').setAttribute('aria-pressed', String(eco));
+            $('ecoBtn').title = override != null
+                ? 'Manual — toque para voltar ao automático'
+                : (autoEco ? 'Bateria/economia do dispositivo ativa — toque para forçar desligar'
+                           : 'Automático — toque para forçar ligar/desligar');
+            clearInterval(sysTimer); clearInterval(repTimer);
+            sysTimer = setInterval(refreshSystem, eco ? 30000 : 5000);
+            repTimer = setInterval(fetchReport, eco ? 120000 : 30000);
+            if (eco) refreshSystem();
+        }
+
+        function recomputeEco() {
+            const target = override != null ? override : autoEco;
+            if (target !== eco) { eco = target; localStorage.setItem('eco', eco ? '1' : '0'); }
+            applyEco();
+        }
+
+        function updateAutoEco() {
+            let now = false;
+            if (battWatcher != null && battWatcher.charging === false && battWatcher.level <= 0.25) now = true;
+            if (navigator.connection && navigator.connection.saveData) now = true;
+            if (navigator.connection && (navigator.connection.effectiveType === 'slow-2g' || navigator.connection.effectiveType === '2g')) now = true;
+            if (now !== autoEco) { autoEco = now; recomputeEco(); }
+        }
+
+        function bindEco() {
+            const btn = $('ecoBtn');
+            const toggle = () => {
+                override = eco ? false : true;
+                recomputeEco();
+            };
+            btn.addEventListener('click', toggle);
+            btn.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+            });
+            if (navigator.getBattery) {
+                navigator.getBattery().then(b => {
+                    battWatcher = b;
+                    b.addEventListener('levelchange', updateAutoEco);
+                    b.addEventListener('chargingchange', updateAutoEco);
+                    updateAutoEco();
+                }).catch(() => {});
+            }
+            if (navigator.connection && navigator.connection.addEventListener) {
+                navigator.connection.addEventListener('change', updateAutoEco);
+            }
+            updateAutoEco();
+        }
+
+        $('btnRefresh').addEventListener('click', fetchReport);
+        $('btnExport').addEventListener('click', exportReport);
+
+        renderDock();
+        refreshSystem();
+        fetchReport();
+        bindEco();
+    </script>
+</body>
+</html>

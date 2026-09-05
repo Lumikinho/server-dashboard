@@ -1,0 +1,22 @@
+{
+  "name": "server-apps",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w apps/dashboard && npm run build -w apps/manager",
+    "typecheck": "npm run typecheck -w packages/ui && npm run typecheck -w apps/dashboard && npm run typecheck -w apps/manager",
+    "dev:dashboard": "npm run dev -w apps/dashboard",
+    "dev:manager": "npm run dev -w apps/manager"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}

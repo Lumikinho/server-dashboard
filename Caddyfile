@@ -1,0 +1,80 @@
+{
+	auto_https off
+}
+
+:8888 {
+	# >>> dashboard (React build em dist/) :: estáticos primeiro
+	handle /services.json {
+		root * /home/lumiko/caddy/dashboard
+		file_server
+	}
+
+	handle /logos/* {
+		root * /home/lumiko/caddy/dashboard
+		file_server
+	}
+
+	handle /assets/* {
+		root * /home/lumiko/caddy/dashboard/dist
+		file_server
+	}
+
+	root * /home/lumiko/caddy/dashboard/dist
+	file_server
+
+	handle_path /system/* {
+		reverse_proxy localhost:8890
+	}
+
+	# >>> gerenciado pelo caddy-manager :: não edite manualmente
+	handle_path /jellyfin/* {
+		reverse_proxy localhost:8096
+	}
+
+	redir /jellyfin /jellyfin/
+	handle_path /codeserver/* {
+		reverse_proxy localhost:8080 {
+			header_up X-Forwarded-Prefix /codeserver/
+		}
+	}
+
+	redir /codeserver /codeserver/
+	handle_path /ai/* {
+		reverse_proxy localhost:4096
+	}
+
+	redir /ai /ai/
+	handle /assets/* {
+		reverse_proxy localhost:4096
+	}
+
+	handle /favicon-* {
+		reverse_proxy localhost:4096
+	}
+
+	handle /apple-touch-icon-* {
+		reverse_proxy localhost:4096
+	}
+
+	handle /site.webmanifest {
+		reverse_proxy localhost:4096
+	}
+
+	handle /social-share.png {
+		reverse_proxy localhost:4096
+	}
+
+	handle /api/* {
+		reverse_proxy localhost:4096
+	}
+
+	handle /event {
+		reverse_proxy localhost:4096
+	}
+
+	handle_path /files/* {
+		reverse_proxy localhost:8083
+	}
+
+	redir /files /files/	# <<< fim gerenciado
+}
